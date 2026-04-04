@@ -1,19 +1,41 @@
 apiVersion: k3d.io/v1alpha5
 kind: Simple
 metadata:
-  name: platform-lab
+  name: platform-cluster
 
 servers: 1
 agents: 2
 
-kubeAPI:
-  hostPort: "6445"
+image: rancher/k3s:v1.29.6-k3s1
 
 ports:
-  - port: 8080:80
+  # HTTP ingress
+  - port: 8080:30080
     nodeFilters:
       - loadbalancer
-  - port: 8443:443
+
+  # HTTPS ingress
+  - port: 8443:30443
+    nodeFilters:
+      - loadbalancer
+
+  # Kafka external access
+  - port: 9092:30992
+    nodeFilters:
+      - loadbalancer
+
+  # Grafana
+  - port: 3000:32044
+    nodeFilters:
+      - loadbalancer
+
+  # Prometheus
+  - port: 9090:32090
+    nodeFilters:
+      - loadbalancer
+
+  # Rancher UI
+  - port: 9443:30443
     nodeFilters:
       - loadbalancer
 
@@ -24,6 +46,9 @@ options:
         nodeFilters:
           - server:*
 
-  kubeconfig:
-    updateDefaultKubeconfig: true
-    switchCurrentContext: true
+kubeAPI:
+  host: "0.0.0.0"
+  hostPort: "6550"
+
+volumes:
+  - volume: ./volumes:/var/lib/rancher/k3s/storage@all
