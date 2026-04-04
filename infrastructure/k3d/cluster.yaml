@@ -9,6 +9,11 @@ agents: 2
 kubeAPI:
   hostPort: "6445"
 
+grafana:
+  service:
+    type: NodePort
+    nodePort: 32000
+
 ports:
   - port: 8080:80
     nodeFilters:
