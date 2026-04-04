@@ -1,26 +1,47 @@
 apiVersion: k3d.io/v1alpha5
 kind: Simple
 metadata:
-  name: platform-lab
+  name: platform-cluster
 
 servers: 1
 agents: 2
 
-kubeAPI:
-  hostPort: "6445"
+# Docker image used by k3s
+image: rancher/k3s:v1.29.6-k3s1
 
-grafana:
-  service:
-    type: NodePort
-    nodePort: 32000
-
+# Expose ports from cluster → localhost
 ports:
-  - port: 8080:80
-    nodeFilters:
-      - loadbalancer
-  - port: 8443:443
-    nodeFilters:
-      - loadbalancer
+  # -----------------------------------
+  # Ingress Controller (HTTP)
+  # Access all dashboards via browser
+  # -----------------------------------
+  - port: 8080:30080@loadbalancer
+
+  # -----------------------------------
+  # Ingress Controller (HTTPS)
+  # -----------------------------------
+  - port: 8443:30443@loadbalancer
+
+  # -----------------------------------
+  # Kafka External Listener
+  # Required for local producers/consumers
+  # -----------------------------------
+  - port: 9092:30992@loadbalancer
+
+  # -----------------------------------
+  # Grafana direct access (optional)
+  # -----------------------------------
+  - port: 3000:32044@loadbalancer
+
+  # -----------------------------------
+  # Prometheus UI (optional debugging)
+  # -----------------------------------
+  - port: 9090:32090@loadbalancer
+
+  # -----------------------------------
+  # Rancher UI
+  # -----------------------------------
+  - port: 9443:30443@loadbalancer
 
 options:
   k3s:
@@ -29,6 +50,11 @@ options:
         nodeFilters:
           - server:*
 
-  kubeconfig:
-    updateDefaultKubeconfig: true
-    switchCurrentContext: true
+# Useful for local development networking
+kubeAPI:
+  host: "0.0.0.0"
+  hostPort: "6550"
+
+# Volumes for persistence (optional future use)
+volumes:
+  - volume: ./volumes:/var/lib/rancher/k3s/storage@all
