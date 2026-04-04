@@ -6,42 +6,38 @@ metadata:
 servers: 1
 agents: 2
 
-# Docker image used by k3s
 image: rancher/k3s:v1.29.6-k3s1
 
-# Expose ports from cluster → localhost
 ports:
-  # -----------------------------------
-  # Ingress Controller (HTTP)
-  # Access all dashboards via browser
-  # -----------------------------------
-  - port: 8080:30080@loadbalancer
+  # HTTP ingress
+  - port: 8080:30080
+    nodeFilters:
+      - loadbalancer
 
-  # -----------------------------------
-  # Ingress Controller (HTTPS)
-  # -----------------------------------
-  - port: 8443:30443@loadbalancer
+  # HTTPS ingress
+  - port: 8443:30443
+    nodeFilters:
+      - loadbalancer
 
-  # -----------------------------------
-  # Kafka External Listener
-  # Required for local producers/consumers
-  # -----------------------------------
-  - port: 9092:30992@loadbalancer
+  # Kafka external access
+  - port: 9092:30992
+    nodeFilters:
+      - loadbalancer
 
-  # -----------------------------------
-  # Grafana direct access (optional)
-  # -----------------------------------
-  - port: 3000:32044@loadbalancer
+  # Grafana
+  - port: 3000:32044
+    nodeFilters:
+      - loadbalancer
 
-  # -----------------------------------
-  # Prometheus UI (optional debugging)
-  # -----------------------------------
-  - port: 9090:32090@loadbalancer
+  # Prometheus
+  - port: 9090:32090
+    nodeFilters:
+      - loadbalancer
 
-  # -----------------------------------
   # Rancher UI
-  # -----------------------------------
-  - port: 9443:30443@loadbalancer
+  - port: 9443:30443
+    nodeFilters:
+      - loadbalancer
 
 options:
   k3s:
@@ -50,11 +46,9 @@ options:
         nodeFilters:
           - server:*
 
-# Useful for local development networking
 kubeAPI:
   host: "0.0.0.0"
   hostPort: "6550"
 
-# Volumes for persistence (optional future use)
 volumes:
   - volume: ./volumes:/var/lib/rancher/k3s/storage@all
