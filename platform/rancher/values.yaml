@@ -1,0 +1,5 @@
+hostname: rancher.local
+replicas: 1
+service:
+  type: NodePort
+  nodePort: 9443

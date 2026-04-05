@@ -1,0 +1,9 @@
+service:
+  type: NodePort
+  nodePort: 3000
+podLabels:
+  app: grafana
+  tier: observability
+persistence:
+  enabled: true
+  size: 1Gi
