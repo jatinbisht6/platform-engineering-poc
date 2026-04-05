@@ -1,11 +1,7 @@
-grafana:
+server:
   service:
     type: NodePort
-
-prometheus:
-  service:
-    type: NodePort
-
-alertmanager:
-  service:
-    type: NodePort
+    nodePort: 30090
+  podLabels:
+    app: prometheus
+    tier: observability
