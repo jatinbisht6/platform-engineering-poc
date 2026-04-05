@@ -92,9 +92,10 @@ helm upgrade --install kafka-operator strimzi/strimzi-kafka-operator \
 # ---------------------------
 echo "✅ Installing cert-manager..."
 helm upgrade --install cert-manager jetstack/cert-manager \
-    --namespace cert-manager --create-namespace \
-    --set installCRDs=true \
-    --set global.leaderElection.namespace=cert-manager
+  --namespace platform-system \
+  --version v1.14.5 \
+  --set installCRDs=true \
+  --set global.leaderElection.namespace=cert-manager
 
 # Wait for cert-manager to be ready
 echo "⏳ Waiting for cert-manager to be ready..."
