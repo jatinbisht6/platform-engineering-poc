@@ -27,10 +27,10 @@ echo "✅ k3d cluster created"
 # 2️⃣ Set kubeconfig
 # ---------------------------
 echo "✅ Setting kubeconfig for $CLUSTER_NAME..."
-export KUBECONFIG=$(k3d kubeconfig get $CLUSTER_NAME)
+# export KUBECONFIG=$(k3d kubeconfig get $CLUSTER_NAME)
 
 # Optional: merge into default kubeconfig (uncomment if needed)
-kubectl config view --raw > ~/.kube/config
+kubectl config set-cluster k3d-platform-cluster --server=https://127.0.0.1:6550 --kubeconfig=$KUBECONFIG
 
 kubectl cluster-info
 echo "✅ kubeconfig set for $CLUSTER_NAME"
@@ -95,13 +95,13 @@ helm upgrade --install cert-manager jetstack/cert-manager \
   --namespace platform-system \
   --version v1.14.5 \
   --set installCRDs=true \
-  --set global.leaderElection.namespace=cert-manager
+  --set global.leaderElection.namespace=platform-system
 
 # Wait for cert-manager to be ready
 echo "⏳ Waiting for cert-manager to be ready..."
-kubectl wait --for=condition=available --timeout=300s deployment/cert-manager -n cert-manager
-kubectl wait --for=condition=available --timeout=300s deployment/cert-manager-cainjector -n cert-manager
-kubectl wait --for=condition=available --timeout=300s deployment/cert-manager-webhook -n cert-manager
+kubectl wait --for=condition=available --timeout=30s deployment/cert-manager -n platform-system
+kubectl wait --for=condition=available --timeout=30s deployment/cert-manager-cainjector -n platform-system
+kubectl wait --for=condition=available --timeout=30s deployment/cert-manager-webhook -n platform-system
 
 # ---------------------------
 # 10️⃣ Install Rancher
@@ -121,4 +121,4 @@ echo "Prometheus: http://localhost:9090"
 echo "Rancher: https://localhost:9443"
 echo "Kafka NodePort: 9092 (Check in 'kafka' namespace)"
 echo "----------------------------------------"
-✅ Key Features of This Script
+echo "✅ Key Features of This Script"
