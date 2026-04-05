@@ -30,7 +30,7 @@ echo "✅ Setting kubeconfig for $CLUSTER_NAME..."
 export KUBECONFIG=$(k3d kubeconfig get $CLUSTER_NAME)
 
 # Optional: merge into default kubeconfig (uncomment if needed)
-# kubectl config view --raw > ~/.kube/config
+kubectl config view --raw > ~/.kube/config
 
 kubectl cluster-info
 echo "✅ kubeconfig set for $CLUSTER_NAME"
