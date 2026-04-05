@@ -52,6 +52,7 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo add strimzi https://strimzi.io/charts/
 helm repo add rancher-latest https://releases.rancher.com/server-charts/latest
+helm repo add jetstack https://charts.jetstack.io
 helm repo update
 
 # ---------------------------
@@ -87,7 +88,22 @@ helm upgrade --install kafka-operator strimzi/strimzi-kafka-operator \
     --namespace kafka --create-namespace
 
 # ---------------------------
-# 9️⃣ Install Rancher
+# 9️⃣ Install cert-manager
+# ---------------------------
+echo "✅ Installing cert-manager..."
+helm upgrade --install cert-manager jetstack/cert-manager \
+    --namespace cert-manager --create-namespace \
+    --set installCRDs=true \
+    --set global.leaderElection.namespace=cert-manager
+
+# Wait for cert-manager to be ready
+echo "⏳ Waiting for cert-manager to be ready..."
+kubectl wait --for=condition=available --timeout=300s deployment/cert-manager -n cert-manager
+kubectl wait --for=condition=available --timeout=300s deployment/cert-manager-cainjector -n cert-manager
+kubectl wait --for=condition=available --timeout=300s deployment/cert-manager-webhook -n cert-manager
+
+# ---------------------------
+# 10️⃣ Install Rancher
 # ---------------------------
 echo "✅ Installing Rancher..."
 helm upgrade --install rancher rancher-latest/rancher \
@@ -95,7 +111,7 @@ helm upgrade --install rancher rancher-latest/rancher \
     --namespace platform-system
 
 # ---------------------------
-# 10️⃣ Output Information
+# 11️⃣ Output Information
 # ---------------------------
 echo "✅ Platform setup complete!"
 echo "----------------------------------------"

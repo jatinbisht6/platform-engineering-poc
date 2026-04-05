@@ -1,6 +1,6 @@
 service:
   type: NodePort
-  nodePort: 3000
+  nodePort: 30000
 podLabels:
   app: grafana
   tier: observability
