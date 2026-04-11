@@ -61,7 +61,7 @@ helm repo update
 echo "✅ Installing NGINX Ingress..."
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
     -f platform/ingress/values.yaml \
-    --namespace platform-system --create-namespace
+    --namespace platform-system
 
 # ---------------------------
 # 6️⃣ Install Prometheus
@@ -85,7 +85,7 @@ helm upgrade --install grafana grafana/grafana \
 echo "✅ Installing Kafka Strimzi Operator..."
 helm upgrade --install kafka-operator strimzi/strimzi-kafka-operator \
     -f platform/kafka-strimzi/values.yaml \
-    --namespace kafka --create-namespace
+    --namespace kafka
 
 # ---------------------------
 # 9️⃣ Install cert-manager
