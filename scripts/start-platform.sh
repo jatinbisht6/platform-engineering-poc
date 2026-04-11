@@ -61,7 +61,7 @@ helm repo update
 echo "✅ Installing NGINX Ingress..."
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
     -f platform/ingress/values.yaml \
-    --namespace platform-system --create-namespace
+    --namespace platform-system
 
 # ---------------------------
 # 6️⃣ Install Prometheus

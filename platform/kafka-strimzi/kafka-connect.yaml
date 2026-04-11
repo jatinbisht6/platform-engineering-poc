@@ -1,0 +1,45 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnect
+metadata:
+  name: kafka-connect
+  namespace: kafka
+  annotations:
+    strimzi.io/use-connector-resources: "true"
+
+spec:
+  version: 3.7.0
+  replicas: 1
+
+  bootstrapServers: kafka-cluster-kafka-bootstrap:9092
+
+  config:
+    group.id: connect-cluster
+
+    # Internal topics
+    offset.storage.topic: connect-offsets
+    config.storage.topic: connect-configs
+    status.storage.topic: connect-status
+
+    # Replication (match your 2-broker setup)
+    offset.storage.replication.factor: 2
+    config.storage.replication.factor: 2
+    status.storage.replication.factor: 2
+
+    # Converters
+    key.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    key.converter.schemas.enable: false
+    value.converter.schemas.enable: false
+
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: "0.5"
+    limits:
+      memory: 1Gi
+      cpu: "1"
+
+  logging:
+    type: inline
+    loggers:
+      log4j.rootLogger: "INFO"
