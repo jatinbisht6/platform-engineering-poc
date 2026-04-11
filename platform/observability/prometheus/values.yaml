@@ -1,7 +1,51 @@
 server:
   service:
     type: NodePort
-    nodePort: 30090
+    nodePort: 32090
+  
+  # Add persistent storage for metrics history
+  persistentVolume:
+    enabled: true
+    size: 5Gi
+    storageClassName: local-path
+  
+  # Add resource limits
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  
+  # Set retention policy (keep 30 days of metrics)
+  retention: "30d"
+  
+  # Configure scrape jobs
+  serverFiles:
+    prometheus.yml:
+      global:
+        scrape_interval: 15s
+        scrape_timeout: 10s
+      scrape_configs:
+        - job_name: 'kubernetes-apiservers'
+          kubernetes_sd_configs:
+            - role: endpoints
+          scheme: https
+          tls_config:
+            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        
+        - job_name: 'kubernetes-nodes'
+          kubernetes_sd_configs:
+            - role: node
+          scheme: https
+          tls_config:
+            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        
+        - job_name: 'prometheus'
+          static_configs:
+            - targets: ['localhost:9090']
+  
   podLabels:
     app: prometheus
     tier: observability

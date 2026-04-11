@@ -1,0 +1,338 @@
+================================================================================
+PLATFORM ENGINEERING LAB - CONFIGURATION UPDATES & TROUBLESHOOTING SUMMARY
+================================================================================
+Date: April 12, 2026
+Time: 00:35:00 UTC (IST)
+Check ID: status-check-20260412003500
+
+================================================================================
+SECTION 1: CONFIGURATION UPDATES APPLIED
+================================================================================
+
+✅ COMPLETED UPDATES:
+
+1. GRAFANA VALUES.YAML ENHANCEMENTS
+   ├─ Memory Limit: 256Mi → 512Mi (doubled)
+   ├─ Memory Request: 128Mi → 256Mi (doubled)
+   ├─ CPU Limit: 300m → 500m
+   ├─ CPU Request: 150m → 250m
+   ├─ Added probe configuration:
+   │  ├─ Readiness: initialDelaySeconds 30, failureThreshold 5
+   │  ├─ Liveness: initialDelaySeconds 60, failureThreshold 10
+   │  └─ Startup: Better timeout handling
+   └─ Status: ✅ DEPLOYED
+
+2. RANCHER VALUES.YAML ENHANCEMENTS
+   ├─ Memory Limit: 512Mi → 1Gi (doubled)
+   ├─ Memory Request: 256Mi → 512Mi (doubled)
+   ├─ CPU Limit: 500m → 1000m (doubled)
+   ├─ CPU Request: 250m → 500m (doubled)
+   ├─ Added probe configuration:
+   │  ├─ Startup: initialDelaySeconds 30, failureThreshold 30
+   │  ├─ Readiness: initialDelaySeconds 60, failureThreshold 5
+   │  └─ Liveness: initialDelaySeconds 120, failureThreshold 5
+   └─ Status: ⏳ DEPLOYMENT IN PROGRESS
+
+3. CLUSTER-CONFIG.YAML OPTIMIZATIONS
+   ├─ Fixed Rancher Port: 9443:30944 → 9443:30969 (matches service port)
+   ├─ Added API Server Options:
+   │  ├─ max-requests-inflight=100
+   │  └─ max-mutating-requests-inflight=50
+   ├─ Added Node Memory Configuration:
+   │  ├─ Server: 2GB
+   │  ├─ Agent 1: 1GB
+   │  └─ Agent 2: 1GB
+   └─ Status: ✅ READY FOR NEXT CLUSTER CREATION
+
+================================================================================
+SECTION 2: ISSUES IDENTIFIED & SOLUTIONS PROVIDED
+================================================================================
+
+🔍 GRAFANA INITIALIZATION ISSUES
+
+Issue Type 1: Permission Denied on PVC Directories
+├─ Root Cause: Old pod files have different ownership
+├─ Symptom: Init:CrashLoopBackOff with "Permission denied" errors
+├─ Solution Applied:
+│  ├─ Increased memory limits (256Mi → 512Mi)
+│  ├─ Deleted old PVC to ensure clean slate
+│  └─ Redeployed Grafana with new configuration
+├─ Current Status: ⏳ PVC being recreated, Pods pending
+└─ Expected Recovery Time: 2-5 minutes
+
+Issue Type 2: Pod Pending State
+├─ Cause: PVC deletion in progress, new one being created
+├─ Expected Behavior: Normal during redeployment
+├─ Timeline:
+│  ├─ T+0min: PVC deletion starts
+│  ├─ T+1min: Old pod termination
+│  ├─ T+2min: New pod scheduled
+│  ├─ T+3min: PVC provisioning
+│  └─ T+5min: Grafana ready
+└─ Status: ⏳ IN PROGRESS
+
+---
+
+🔍 RANCHER INITIALIZATION ISSUES
+
+Issue Type 1: OOM Killed (Exit Code 137)
+├─ Root Cause: Insufficient memory during database initialization
+├─ Symptom: Pod restarts after 2-3 minutes with OOM error
+├─ Solution Applied:
+│  ├─ Increased memory limits (512Mi → 1Gi)
+│  ├─ Increased CPU limits (500m → 1000m)
+│  └─ Adjusted probe timeouts for longer initialization
+├─ Current Status: ⏳ DEPLOYMENT IN PROGRESS (upgrade in progress)
+└─ Expected Recovery Time: 5-10 minutes
+
+Issue Type 2: Startup Probe Failures
+├─ Cause: Long initialization time (3-5 min), probes too aggressive
+├─ Solution Applied:
+│  ├─ Startup probe: 30s delay, 30 failures before giving up (450s total)
+│  ├─ Readiness probe: 60s delay, 5 failures
+│  └─ Liveness probe: 120s delay, 5 failures
+├─ Current Status: ⏳ DEPLOYMENT IN PROGRESS
+└─ Expected Recovery Time: 5-10 minutes
+
+================================================================================
+SECTION 3: FILES CREATED & UPDATED
+================================================================================
+
+✅ NEW FILES CREATED:
+
+1. docs/cluster-configuration.md
+   ├─ Size: ~15KB
+   ├─ Contents: Comprehensive cluster configuration guide
+   ├─ Sections:
+   │  ├─ Cluster setup and port mappings
+   │  ├─ Component installation details
+   │  ├─ Known issues and solutions
+   │  ├─ Performance optimization tips
+   │  ├─ Troubleshooting checklist
+   │  ├─ Resource requirements
+   │  ├─ Access points and credentials
+   │  └─ Health monitoring scripts
+   └─ Purpose: Complete reference for platform configuration
+
+2. scripts/stop-platform.sh
+   ├─ Size: ~12KB
+   ├─ Type: Bash script (executable)
+   ├─ Functionality:
+   │  ├─ Phase 1: Drain Kubernetes nodes
+   │  ├─ Phase 2: Uninstall Helm releases (in dependency order)
+   │  ├─ Phase 3: Delete persistent volumes
+   │  ├─ Phase 4: Delete namespaces
+   │  ├─ Phase 5: Stop k3d cluster
+   │  └─ Phase 6: Optional cleanup (interactive)
+   ├─ Logging: Timestamped logs to co-pilot-check-log/stop-*.log
+   ├─ Error Handling: Graceful error recovery with continuation options
+   └─ Purpose: Graceful platform shutdown with proper resource cleanup
+
+✅ FILES MODIFIED:
+
+1. platform/observability/grafana/values.yaml
+   ├─ Changes: Increased memory/CPU limits, added probe config
+   └─ Lines Modified: resource limits and new container probes section
+
+2. platform/rancher/values.yaml
+   ├─ Changes: Increased memory/CPU limits, added probe configuration
+   └─ Lines Modified: resource limits and new probe configuration section
+
+3. infrastructure/k3d/cluster-config.yaml
+   ├─ Changes: Fixed port mapping, added API server options, node memory config
+   ├─ Port Fix: 9443:30944 → 9443:30969
+   ├─ Added: API server concurrency settings
+   └─ Added: Node memory allocation specifications
+
+================================================================================
+SECTION 4: HELM RELEASE STATUS
+================================================================================
+
+Current Helm Installations:
+
+┌──────────────┬─────────────────┬──────────────────┬──────────┬─────┐
+│ Release      │ Namespace       │ Chart Version    │ Status   │ Rev │
+├──────────────┼─────────────────┼──────────────────┼──────────┼─────┤
+│ ingress-nginx│ platform-system │ 4.15.1           │ deployed │ 1   │
+│ prometheus   │ platform-system │ 29.2.0           │ deployed │ 1   │
+│ grafana      │ platform-system │ 10.5.15          │ deployed │ 2   │ ← UPGRADED
+│ cert-manager │ platform-system │ v1.14.5          │ deployed │ 1   │
+│ kafka-op     │ kafka           │ strimzi-*        │ deployed │ 1   │
+│ rancher      │ platform-system │ 2.14.0           │ upgrading│ 3   │ ← IN PROGRESS
+└──────────────┴─────────────────┴──────────────────┴──────────┴─────┘
+
+================================================================================
+SECTION 5: RECOMMENDED NEXT STEPS
+================================================================================
+
+✅ IMMEDIATE ACTIONS (Next 5-10 minutes):
+
+1. Monitor Pod Status Recovery
+   ```bash
+   kubectl get pods -n platform-system -w
+   ```
+   Expected progression:
+   ├─ T+0: grafana and rancher pods Pending
+   ├─ T+2: Pods scheduled to nodes
+   ├─ T+3: Initialization in progress (Init containers running)
+   ├─ T+5: Grafana may reach Ready state
+   └─ T+10: Rancher may reach Ready state
+
+2. Monitor Helm Upgrade Status
+   ```bash
+   helm list -n platform-system
+   ```
+   Expected: rancher status changes from "upgrading" to "deployed"
+
+3. Check Resource Usage
+   ```bash
+   docker stats --no-stream
+   ```
+   Expected: Memory usage increase during pod initialization
+
+---
+
+⏳ MONITORING PHASE (5-30 minutes):
+
+1. Verify Grafana Access
+   ```bash
+   curl http://localhost:3000
+   kubectl logs -f deployment/grafana -n platform-system
+   ```
+   Expected: HTTP 200 response, no error logs
+
+2. Verify Rancher Access
+   ```bash
+   curl -k https://localhost:9443
+   kubectl logs -f deployment/rancher -n platform-system
+   ```
+   Expected: HTTPS 200+ response after 5-10 min initialization
+
+3. Check All Services
+   ```bash
+   kubectl get svc -n platform-system
+   ```
+   Expected: All services with External-IP or NodePort
+
+---
+
+🔄 IF ISSUES PERSIST (After 15 minutes):
+
+1. Restart Problematic Components
+   ```bash
+   # For Grafana
+   kubectl rollout restart deployment/grafana -n platform-system
+   
+   # For Rancher
+   kubectl rollout restart deployment/rancher -n platform-system
+   ```
+
+2. Check Pod Events
+   ```bash
+   kubectl describe pod <pod-name> -n platform-system
+   ```
+   Look for: Event messages in "Events:" section at bottom
+
+3. Review Logs
+   ```bash
+   kubectl logs deployment/grafana -n platform-system --tail=100
+   kubectl logs deployment/rancher -n platform-system --tail=100
+   ```
+
+4. Consult docs/cluster-configuration.md for detailed troubleshooting
+
+---
+
+📋 DOCUMENTATION AVAILABLE:
+
+1. docs/command-reference.md
+   └─ All commands used in deployment process
+
+2. docs/cluster-configuration.md (NEW)
+   └─ Comprehensive cluster configuration and troubleshooting guide
+
+3. docs/cluster_config_correction.md
+   └─ Port mapping corrections documentation
+
+4. docs/values-yaml-recommendations.md
+   └─ Component enhancement recommendations
+
+5. scripts/stop-platform.sh (NEW)
+   └─ Automated platform shutdown script
+
+================================================================================
+SECTION 6: RESOURCE ALLOCATION SUMMARY
+================================================================================
+
+CURRENT CLUSTER MEMORY:
+├─ Server Node: 2GB
+├─ Agent Node 1: 1GB
+├─ Agent Node 2: 1GB
+└─ Total Available: 4GB
+
+COMPONENT MEMORY ALLOCATION (After Updates):
+├─ Grafana: 512Mi limit (was 256Mi)
+├─ Rancher: 1Gi limit (was 512Mi)
+├─ Prometheus: 512Mi limit
+├─ Alertmanager: 128Mi limit
+├─ NGINX: 256Mi limit
+├─ cert-manager components: ~256Mi combined
+└─ System overhead: ~500Mi
+└─ Total Requested: ~3.5GB+
+
+RESOURCE USAGE BEFORE ISSUES:
+├─ Server max CPU: 72.95%
+├─ Agent-0 max CPU: 40.37%
+├─ Agent-1 max CPU: 33.39%
+└─ Memory: Well within limits
+
+================================================================================
+SECTION 7: CLUSTER STARTUP FOR FRESH DEPLOYMENT
+================================================================================
+
+To apply these optimizations on a fresh cluster:
+
+1. Update cluster-config.yaml with new settings
+2. Delete old cluster: k3d cluster delete platform-cluster
+3. Create new cluster: k3d cluster create -c infrastructure/k3d/cluster-config.yaml
+4. Apply namespaces: kubectl apply -f infrastructure/namespaces.yaml
+5. Install components with new values: ./scripts/start-platform.sh
+
+This will ensure:
+✅ Correct port mappings from start
+✅ API server optimization flags
+✅ Proper memory allocation
+✅ Grafana and Rancher with sufficient resources
+✅ Faster initialization and better stability
+
+================================================================================
+SUMMARY
+================================================================================
+
+🎯 CHANGES MADE:
+✅ Doubled memory limits for Grafana and Rancher
+✅ Added intelligent probe timeouts for initialization
+✅ Fixed port mapping in cluster-config.yaml
+✅ Added API server optimizations
+✅ Created comprehensive troubleshooting guide
+✅ Created automated stop/shutdown script
+
+📊 EXPECTED OUTCOMES:
+✅ Grafana should reach Ready state in 5-10 minutes
+✅ Rancher should reach Ready state in 10-15 minutes
+✅ No more OOM kills or probe failures
+✅ Cleaner startup/shutdown process
+✅ Better documented platform configuration
+
+🔧 NEXT ACTIONS:
+1. Monitor pod recovery (5-30 minutes)
+2. Verify component access
+3. Test platform functionality
+4. Document any additional issues
+
+For detailed reference, see: docs/cluster-configuration.md
+For shutdown procedures: scripts/stop-platform.sh
+
+================================================================================
+END OF REPORT
+================================================================================

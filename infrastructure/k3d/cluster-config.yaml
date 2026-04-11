@@ -35,7 +35,7 @@ ports:
       - loadbalancer
 
   # Rancher UI
-  - port: 9443:30443
+  - port: 9443:30969
     nodeFilters:
       - loadbalancer
 
@@ -45,6 +45,13 @@ options:
       - arg: "--disable=traefik"
         nodeFilters:
           - server:*
+      # Optimize resource usage
+      - arg: "--kube-apiserver-arg=--max-requests-inflight=100"
+        nodeFilters:
+          - server:*
+      - arg: "--kube-apiserver-arg=--max-mutating-requests-inflight=50"
+        nodeFilters:
+          - server:*
 
 kubeAPI:
   host: "0.0.0.0"
@@ -52,3 +59,12 @@ kubeAPI:
 
 volumes:
   - volume: ./volumes:/var/lib/rancher/k3s/storage@all
+
+# Node configuration for resource optimization
+nodes:
+  - role: server
+    memory: 2g
+  - role: agent
+    memory: 1g
+  - role: agent
+    memory: 1g
