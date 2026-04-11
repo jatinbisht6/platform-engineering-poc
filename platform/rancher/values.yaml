@@ -1,5 +1,34 @@
-hostname: rancher.local
+# For local dev, use localhost instead of rancher.local
+hostname: localhost
+
 replicas: 1
+
 service:
   type: NodePort
-  nodePort: 9443
+  nodePort: 30443
+
+# Set bootstrap password
+bootstrapPassword: "RancherDevPassword123!"
+
+# Add resource limits (increased for stability)
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+# Increase probe timeouts for initialization and stability
+startupProbe:
+  initialDelaySeconds: 30
+  periodSeconds: 15
+  failureThreshold: 30
+readinessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 5
+livenessProbe:
+  initialDelaySeconds: 120
+  periodSeconds: 30
+  failureThreshold: 5
