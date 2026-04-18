@@ -9,7 +9,7 @@ set -euo pipefail
 
 CLUSTER_NAME="platform-cluster"
 K3D_CONFIG="infrastructure/k3d/cluster-config.yaml"
-KUBECONFIG_FILE="$(pwd)/.k3d-${CLUSTER_NAME}-config"
+KUBECONFIG_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.k3d-${CLUSTER_NAME}-config"
 export KUBECONFIG="$KUBECONFIG_FILE"
 
 function ensure_command() {
@@ -86,8 +86,17 @@ add_helm_repo prometheus-community https://prometheus-community.github.io/helm-c
 add_helm_repo grafana https://grafana.github.io/helm-charts
 add_helm_repo strimzi https://strimzi.io/charts/
 add_helm_repo rancher-latest https://releases.rancher.com/server-charts/latest
+add_helm_repo rancher-stable https://releases.rancher.com/server-charts/stable
 add_helm_repo jetstack https://charts.jetstack.io
 helm repo update
+
+# ---------------------------
+# 4.5️⃣ Configure Local Path Provisioner
+# ---------------------------
+
+echo "✅ Configuring Local Path Provisioner..."
+kubectl patch configmap local-path-config -n kube-system --type merge -p '{"data":{"config.json":"{\"nodePathMap\":[{\"node\":\"DEFAULT_PATH_FOR_NON_LISTED_NODES\",\"paths\":[\"/data\"]}]}"}}'
+kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
 
 # ---------------------------
 # 5️⃣ Install NGINX Ingress
