@@ -14,11 +14,8 @@ kubectl apply -f platform/kafka-strimzi/kafka-cluster.yaml
 echo "⏳ Waiting for Kafka cluster..."
 kubectl wait kafka/kafka-cluster \
   --for=condition=Ready \
-  --timeout=30s \
-  -n kafka || true
-
-# Mapping k3d load balancer port to Kafka's external listener
-k3d cluster create --port "30092:30092@loadbalancer"
+  --timeout=300s \
+  -n kafka || echo "⚠️  Kafka cluster still initializing..."
 
 
 # ---------------------------
@@ -28,10 +25,11 @@ echo "🔌 Deploying Kafka Connect..."
 
 kubectl apply -f platform/kafka-strimzi/kafka-connect.yaml
 
-kubectl wait kafka/kafka-connect \
-  --for=condition=Ready \
+echo "⏳ Waiting for Kafka Connect..."
+kubectl wait deployment/kafka-connect \
+  --for=condition=Progressing \
   --timeout=300s \
-  -n kafka || true
+  -n kafka || echo "⚠️  Kafka Connect still initializing..."
 
 
 # ---------------------------
