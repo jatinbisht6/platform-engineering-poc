@@ -53,18 +53,8 @@ options:
         nodeFilters:
           - server:*
 
-kubeAPI:
-  host: "0.0.0.0"
-  hostPort: "6550"
-
 volumes:
+  - volume: "D:\\data:/data"
+    nodeFilters:
+      - all
   - volume: ./volumes:/var/lib/rancher/k3s/storage@all
-
-# Node configuration for resource optimization
-nodes:
-  - role: server
-    memory: 2g
-  - role: agent
-    memory: 1g
-  - role: agent
-    memory: 1g

@@ -177,7 +177,7 @@ service:
   nodePort: 32044
 
 # Set admin credentials
-adminPassword: "GrafanaDevPassword123!"  # Change in production
+adminPassword: "*********************"  # Change in production
 
 # Configure persistent storage
 persistence:

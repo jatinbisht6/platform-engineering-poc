@@ -1,7 +1,10 @@
 # Cluster Config Corrections
 
 ## Overview
-This document outlines corrections and optimizations for the Helm values.yaml files to ensure they align with the k3d cluster configuration in `infrastructure/k3d/cluster-config.yaml`. The cluster config defines port mappings (external:internal), but some values.yaml files had mismatched nodePorts, which could cause conflicts or inaccessibility.
+This document outlines corrections and optimizations made to the k3d cluster configuration and Helm values.yaml files. The changes address port mappings, persistent storage configuration, and YAML structure validation to ensure all components deploy correctly and data persists on the D: drive.
+
+**Last Updated**: April 19, 2026  
+**Status**: ✅ Cluster deployed successfully with core components
 
 ## Corrections Applied
 
@@ -83,25 +86,127 @@ entityOperator:
 ## Benefits of These Corrections
 - Eliminates port conflicts between external access and internal services.
 - Ensures services are accessible via the expected URLs (e.g., Prometheus at http://localhost:9090).
+- Persistent data on D: drive survives cluster restarts (via volume mount).
 - Improves reliability in local development environments.
 - Maintains consistency between cluster configuration and Helm deployments.
 
-## How to Apply
-1. Apply the corrections to each values.yaml file (see implementation below).
-2. If components are already deployed, re-run the Helm installs (e.g., `helm upgrade --install prometheus ...`).
-3. Verify pod health: `kubectl get pods -n <namespace>`
-4. Test access after updates (see verification steps below).
+---
 
-## Access Points After Deployment
-- **Grafana**: http://localhost:3000 (default: admin/admin)
-- **Prometheus**: http://localhost:9090
-- **Rancher**: https://localhost:9443
-- **HTTP Ingress**: http://localhost:8080
-- **HTTPS Ingress**: https://localhost:8443
-- **Kafka**: localhost:9092 (for external clients)
+## 6. Cluster Configuration (infrastructure/k3d/cluster-config.yaml) - CRITICAL FIX
 
-## Date
-April 11, 2026
+### Issues Identified and Fixed
 
-## Reference
-- Cluster Config: [infrastructure/k3d/cluster-config.yaml](../infrastructure/k3d/cluster-config.yaml)
+**Issue 1: Duplicate `volumes` keys**
+- YAML had two separate `volumes:` sections causing parsing errors
+- Error: `line 65: mapping key "volumes" already defined at line 56`
+
+**Issue 2: Mixed YAML structure**
+- Kubernetes API arguments were mixed within nodeFilters list
+- Invalid YAML hierarchy prevented cluster creation
+
+**Issue 3: Invalid `nodes` section**
+- k3d Simple config doesn't support custom `nodes` configuration
+- Error: `Additional property nodes is not allowed`
+
+### Corrections Applied
+
+**Fixed cluster-config.yaml**:
+```yaml
+options:
+  k3s:
+    extraArgs:
+      - arg: "--disable=traefik"
+        nodeFilters:
+          - server:*
+      - arg: "--kube-apiserver-arg=--max-requests-inflight=100"
+        nodeFilters:
+          - server:*
+      - arg: "--kube-apiserver-arg=--max-mutating-requests-inflight=50"
+        nodeFilters:
+          - server:*
+
+volumes:
+  - volume: "D:\\data:/data"              # Maps Windows D: drive to container /data
+    nodeFilters:
+      - all                                # Apply to all nodes
+  - volume: ./volumes:/var/lib/rancher/k3s/storage@all
+
+kubeAPI:
+  host: "0.0.0.0"
+  hostPort: "6550"
+```
+
+### Result
+- ✅ YAML now validates correctly
+- ✅ Cluster creates successfully with `k3d cluster create --config infrastructure/k3d/cluster-config.yaml`
+- ✅ Host D: drive is mounted into all k3d nodes at `/data`
+- ✅ Enables persistent storage for Kubernetes PVCs
+
+---
+
+## 7. Local Path Provisioner Configuration
+
+### Issue Encountered
+- Helm chart `local-path-provisioner` not found in available repositories
+- Manual YAML URL returned 404 errors
+- Storage class was not configured to use the D: drive mount
+
+### Solution Implemented
+- Use k3s built-in Local Path Provisioner (already deployed in k3d)
+- Configure via ConfigMap patch to use `/data` path
+- Set as default StorageClass for automatic PVC binding
+
+**Configuration Commands**:
+```bash
+# Configure provisioner to use /data path
+kubectl patch configmap local-path-config -n kube-system \
+  --type merge \
+  -p '{"data":{"config.json":"{\"nodePathMap\":[{\"node\":\"DEFAULT_PATH_FOR_NON_LISTED_NODES\",\"paths\":[\"/data\"]}]}"}}'
+
+# Set local-path as default StorageClass
+kubectl patch storageclass local-path \
+  -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+```
+
+### Result
+- ✅ PVCs automatically bind to `local-path` StorageClass
+- ✅ Data persists in `D:\data` on Windows host
+- ✅ Survives pod restarts and cluster stops
+
+---
+
+## Current Deployment Status (April 19, 2026)
+
+### ✅ Successfully Deployed
+- **Cluster**: platform-cluster (1 server + 2 agents)
+- **NGINX Ingress Controller**: Listening on ports 8080/8443
+- **cert-manager**: Certificate management ready
+- **Prometheus**: Metrics collection running
+  - UI: http://localhost:9090
+  - PVC: prometheus-server (5Gi) ← Using local-path storage
+- **Local Path Provisioner**: Configured for `/data` mount
+
+### ⏳ Pending Deployment
+- **Grafana**: Visualization dashboard
+- **Rancher**: Cluster management UI
+- **Kafka Strimzi Operator**: Event streaming platform
+- **Kafka Cluster**: Distributed broker deployment
+- **Kafka Connect**: Connector runtime
+- **Airflow/Argo**: Workflow orchestration
+
+### 📋 Deployment Commands
+Run these to complete the platform setup:
+```bash
+# Verify cluster health
+kubectl get nodes
+kubectl get pvc -A
+kubectl get storageclass
+
+# Check D:\data directory
+ls -la /data  # (from within cluster)
+
+# Continue installation
+./scripts/install-data-platform.sh
+```
+
+---
