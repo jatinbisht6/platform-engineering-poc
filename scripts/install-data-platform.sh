@@ -1,63 +1,100 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
+
+NAMESPACE="kafka"
 
 echo "🚀 Installing Data Platform Components..."
 
 # ---------------------------
-# 1️⃣ Deploy Kafka Cluster
+# Utility Functions
 # ---------------------------
-echo "📦 Deploying Kafka cluster..."
 
-kubectl apply -f platform/kafka-strimzi/kafka-cluster.yaml
+resource_exists() {
+  kubectl get "$1" "$2" -n "$NAMESPACE" &>/dev/null
+}
 
-echo "⏳ Waiting for Kafka cluster..."
-kubectl wait kafka/kafka-cluster \
-  --for=condition=Ready \
-  --timeout=30s \
-  -n kafka || true
+wait_for_kafka() {
+  kubectl wait kafka/"$1" \
+    --for=condition=Ready \
+    --timeout=300s \
+    -n "$NAMESPACE"
+}
 
-# Mapping k3d load balancer port to Kafka's external listener
-k3d cluster create --port "30092:30092@loadbalancer"
-
-
-# ---------------------------
-# 2️⃣ Deploy Kafka Connect
-# ---------------------------
-echo "🔌 Deploying Kafka Connect..."
-
-kubectl apply -f platform/kafka-strimzi/kafka-connect.yaml
-
-kubectl wait kafka/kafka-connect \
-  --for=condition=Ready \
-  --timeout=300s \
-  -n kafka || true
-
+wait_for_deployment() {
+  kubectl wait deployment/"$1" \
+    --for=condition=Available \
+    --timeout=300s \
+    -n "$NAMESPACE"
+}
 
 # ---------------------------
-# 3️⃣ Deploy Kafka Connectors
+# 1️⃣ Kafka Cluster
 # ---------------------------
-echo "🔗 Deploying Kafka Connectors..."
 
-# kubectl apply -f applications/connectors/
+echo "📦 Checking Kafka cluster..."
 
+if resource_exists kafka kafka-cluster; then
+  echo "🔍 Kafka cluster exists. Checking status..."
+
+  if wait_for_kafka kafka-cluster; then
+    echo "✅ Kafka cluster already running. Skipping deployment."
+  else
+    echo "⚠️ Kafka exists but not ready. Re-applying..."
+    kubectl apply -f platform/kafka-strimzi/kafka-cluster.yaml
+  fi
+
+else
+  echo "🚀 Deploying Kafka cluster..."
+  kubectl apply -f platform/kafka-strimzi/kafka-cluster.yaml
+
+  echo "⏳ Waiting for Kafka cluster..."
+  wait_for_kafka kafka-cluster || echo "⚠️ Kafka still initializing..."
+fi
 
 # ---------------------------
-# 4️⃣ Deploy Kafka Streams Apps
+# 2️⃣ Kafka Connect
 # ---------------------------
-echo "🌊 Deploying Kafka Streams applications..."
 
-# kubectl apply -f applications/kstreams/
+echo "🔌 Checking Kafka Connect..."
 
+if resource_exists deployment kafka-connect; then
+  echo "🔍 Kafka Connect exists. Checking status..."
+
+  if wait_for_deployment kafka-connect; then
+    echo "✅ Kafka Connect already running. Skipping deployment."
+  else
+    echo "⚠️ Kafka Connect exists but not ready. Re-applying..."
+    kubectl apply -f platform/kafka-strimzi/kafka-connect.yaml
+  fi
+
+else
+  echo "🚀 Deploying Kafka Connect..."
+  kubectl apply -f platform/kafka-strimzi/kafka-connect.yaml
+
+  echo "⏳ Waiting for Kafka Connect..."
+  wait_for_deployment kafka-connect || echo "⚠️ Kafka Connect still initializing..."
+fi
 
 # ---------------------------
-# 5️⃣ Deploy Batch Processing (Airflow / Argo)
+# 3️⃣ Kafka Connectors
 # ---------------------------
-echo "📊 Deploying Batch Processing..."
 
-# Example (choose one later)
-# kubectl apply -f platform/airflow/
-# kubectl apply -f platform/argo/
+echo "🔗 Deploying Kafka Connectors (if needed)..."
+# Add similar logic later
 
+# ---------------------------
+# 4️⃣ Kafka Streams Apps
+# ---------------------------
+
+echo "🌊 Deploying Kafka Streams applications (if needed)..."
+# Add similar logic later
+
+# ---------------------------
+# 5️⃣ Batch Processing
+# ---------------------------
+
+echo "📊 Deploying Batch Processing (if needed)..."
+# Add similar logic later
 
 echo "✅ Data Platform setup complete!"

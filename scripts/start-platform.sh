@@ -9,8 +9,8 @@ set -euo pipefail
 
 CLUSTER_NAME="platform-cluster"
 K3D_CONFIG="infrastructure/k3d/cluster-config.yaml"
-KUBECONFIG_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.k3d-${CLUSTER_NAME}-config"
-export KUBECONFIG="$KUBECONFIG_FILE"
+KUBECONFIG_FILE="infrastructure/k3d/kube-config.yaml"
+# export KUBECONFIG="$KUBECONFIG_FILE"
 
 function ensure_command() {
     local cmd="$1"
@@ -32,6 +32,13 @@ function wait_for_deployment() {
     local name="$1"
     local namespace="$2"
     local timeout="120s"
+    if [ "$#" -ge 3 ] && [ -n "$3" ]; then
+        if [[ "$3" =~ ^[0-9]+$ ]]; then
+            timeout="${3}s"
+        else
+            timeout="$3"
+        fi
+    fi
 
     echo "⏳ Waiting for deployment/$name in namespace $namespace..."
     kubectl wait --for=condition=available --timeout="$timeout" deployment/$name -n "$namespace"
@@ -47,7 +54,7 @@ if k3d cluster list | grep -q "$CLUSTER_NAME"; then
     k3d cluster delete "$CLUSTER_NAME"
 fi
 
-k3d cluster create --config "$K3D_CONFIG"
+k3d cluster create --config "$K3D_CONFIG" --api-port 6550
 echo "✅ k3d cluster created"
 
 # ---------------------------
@@ -57,8 +64,25 @@ echo "✅ k3d cluster created"
 echo "✅ Writing kubeconfig for $CLUSTER_NAME to $KUBECONFIG_FILE..."
 k3d kubeconfig get "$CLUSTER_NAME" > "$KUBECONFIG_FILE"
 
+# Fix kubeconfig to use localhost instead of host.docker.internal (for Windows/WSL2 compatibility)
+if command -v sed &> /dev/null; then
+    sed -i 's/host\.docker\.internal/127.0.0.1/g' "$KUBECONFIG_FILE"
+fi
+
+cp infrastructure/k3d/kube-config.yaml ~/.kube/config
 echo "✅ Using kubeconfig: $KUBECONFIG_FILE"
-kubectl cluster-info
+kubectl config view
+
+# Wait for API server to be ready
+echo "⏳ Waiting for API server to be ready..."
+for i in {1..60}; do
+    if kubectl cluster-info &>/dev/null; then
+        echo "✅ API server is ready"
+        break
+    fi
+    echo "⏳ Attempt $i/60: Waiting for API server..."
+    sleep 2
+done
 
 echo "✅ kubeconfig configured"
 
@@ -105,7 +129,8 @@ kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storagec
 echo "✅ Installing NGINX Ingress..."
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
     -f platform/ingress/values.yaml \
-    --namespace platform-system
+    --namespace platform-system \
+    --create-namespace
 wait_for_deployment ingress-nginx-controller platform-system
 
 # ---------------------------
@@ -115,6 +140,7 @@ wait_for_deployment ingress-nginx-controller platform-system
 echo "✅ Installing cert-manager..."
 helm upgrade --install cert-manager jetstack/cert-manager \
   --namespace platform-system \
+  --create-namespace \
   --version v1.14.5 \
   --set installCRDs=true \
   --set global.leaderElection.namespace=platform-system
@@ -129,8 +155,9 @@ wait_for_deployment cert-manager-webhook platform-system
 echo "✅ Installing Prometheus..."
 helm upgrade --install prometheus prometheus-community/prometheus \
     -f platform/observability/prometheus/values.yaml \
-    --namespace platform-system
-wait_for_deployment prometheus-server platform-system
+    --namespace platform-system \
+    --create-namespace
+wait_for_deployment prometheus-server platform-system 300
 
 # ---------------------------
 # 8️⃣ Install Grafana
@@ -139,8 +166,9 @@ wait_for_deployment prometheus-server platform-system
 echo "✅ Installing Grafana..."
 helm upgrade --install grafana grafana/grafana \
     -f platform/observability/grafana/values.yaml \
-    --namespace platform-system
-wait_for_deployment grafana platform-system
+    --namespace platform-system \
+    --create-namespace
+wait_for_deployment grafana platform-system 1200
 
 # ---------------------------
 # 9️⃣ Install Kafka Strimzi Operator
@@ -149,8 +177,9 @@ wait_for_deployment grafana platform-system
 echo "✅ Installing Kafka Strimzi Operator..."
 helm upgrade --install kafka-operator strimzi/strimzi-kafka-operator \
     -f platform/kafka-strimzi/values.yaml \
-    --namespace kafka
-wait_for_deployment strimzi-cluster-operator kafka
+    --namespace kafka \
+    --create-namespace
+wait_for_deployment strimzi-cluster-operator kafka 1200
 
 # ---------------------------
 # 🔟 Install Rancher
@@ -159,8 +188,13 @@ wait_for_deployment strimzi-cluster-operator kafka
 echo "✅ Installing Rancher..."
 helm upgrade --install rancher rancher-latest/rancher \
     -f platform/rancher/values.yaml \
-    --namespace platform-system
-wait_for_deployment rancher platform-system
+    --namespace platform-system \
+    --create-namespace
+wait_for_deployment rancher platform-system 1200
+
+# ---------------------------
+# 1️⃣1️⃣ Output Information
+# ---------------------------
 
 # ---------------------------
 # 1️⃣1️⃣ Output Information
@@ -174,3 +208,12 @@ echo "Rancher: https://localhost:9443"
 echo "Kafka External: localhost:9092"
 echo "----------------------------------------"
 echo "Note: Use 'kubectl get pods -n platform-system' to verify component readiness."
+
+# ---------------------------
+# 1️⃣2️⃣ Install Data Platform
+# ---------------------------
+
+echo ""
+echo "🚀 Starting Data Platform installation..."
+bash ./scripts/install-data-platform.sh
+echo "✅ Complete platform setup finished!"

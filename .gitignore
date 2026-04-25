@@ -1,0 +1,25 @@
+# k3d kubeconfig - contains sensitive auth data
+scripts/.k3d-platform-cluster-config
+
+# Local logs - can be regenerated
+*.log
+co-pilot-check-log/deployment-log*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+
+# Temporary files
+*.tmp
+*.bak
