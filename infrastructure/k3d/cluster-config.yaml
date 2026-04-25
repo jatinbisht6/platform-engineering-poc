@@ -8,6 +8,11 @@ agents: 2
 
 image: rancher/k3s:v1.29.6-k3s1
 
+# https://127.0.0.1:6550
+kubeAPI:
+  host: "127.0.0.1"
+  hostPort: "6550"
+
 ports:
   # HTTP ingress
   - port: 8080:30080
@@ -57,4 +62,6 @@ volumes:
   - volume: "D:\\data:/data"
     nodeFilters:
       - all
-  - volume: ./volumes:/var/lib/rancher/k3s/storage@all
+  - volume: "./volumes:/var/lib/rancher/k3s/storage"
+    nodeFilters:
+      - all

@@ -3,13 +3,55 @@
 ## Overview
 This document serves as a comprehensive reference for all commands used during the Platform Engineering Lab setup. Commands are organized by category with descriptions, syntax, and context for easy reference and reproducibility.
 
-**Last Updated**: April 11, 2026
+**Last Updated**: April 25, 2026
 **Platform**: Windows 10 / WSL2 / Docker Desktop / k3d
 **Kubernetes**: v1.29.6+k3s1
 
 ---
 
-## 1. Cluster Setup & Verification
+## 1. k3d Cluster Management
+
+### Create k3d Cluster
+```bash
+k3d cluster create --config infrastructure/k3d/cluster-config.yaml --api-port 6550
+```
+**Description**: Creates a new k3d cluster using the cluster configuration file.  
+**Context**: Sets up lightweight Kubernetes cluster with specified nodes and port mappings.  
+**Expected Output**: "Cluster 'platform-cluster' created successfully!".  
+**Frequency**: Once, during initial platform setup.  
+**Config File**: infrastructure/k3d/cluster-config.yaml (1 server, 2 agents, port mappings).  
+**Note**: Removes existing cluster with same name first if running.
+
+### Delete k3d Cluster
+```bash
+k3d cluster delete platform-cluster
+```
+**Description**: Removes the k3d cluster and all its volumes.  
+**Context**: Cleanup between deployments or full platform reset.  
+**Expected Output**: "Successfully deleted cluster platform-cluster!".  
+**Frequency**: When resetting platform or updating cluster configuration.
+
+### Get k3d Kubeconfig
+```bash
+k3d kubeconfig get platform-cluster > infrastructure/k3d/kube-config.yaml
+```
+**Description**: Extracts kubeconfig from the k3d cluster to a file.  
+**Context**: Configures kubectl access to the cluster.  
+**Expected Output**: YAML file with cluster credentials and API endpoint.  
+**Frequency**: Once after cluster creation, or when resetting credentials.
+
+### List k3d Clusters
+```bash
+k3d cluster list
+```
+**Description**: Shows all existing k3d clusters on the system.  
+**Context**: Verifies which clusters are available.  
+**Expected Output**: Cluster name, servers, agents, status.  
+**Frequency**: Before creating a new cluster or troubleshooting.
+
+---
+
+## 2. Cluster Setup & Verification
 
 ### Docker Status Check
 ```bash
@@ -234,6 +276,78 @@ helm upgrade --install rancher rancher-latest/rancher \
 **Frequency**: Once, during Phase 1.9.  
 **Values File**: platform/rancher/values.yaml (localhost hostname, bootstrap password).
 
+### Install Rancher
+```bash
+helm upgrade --install rancher rancher-latest/rancher \
+    -f platform/rancher/values.yaml \
+    --namespace platform-system
+```
+**Description**: Installs Rancher cluster management platform with custom values.  
+**Context**: Provides Kubernetes cluster management UI.  
+**Expected Output**: "NAME: rancher", "STATUS: deployed".  
+**Frequency**: Once, during Phase 1.9.  
+**Values File**: platform/rancher/values.yaml (localhost hostname, bootstrap password).
+
+### Configure Local Path Provisioner
+```bash
+kubectl patch configmap local-path-config -n kube-system --type merge -p '{"data":{"config.json":"{\"nodePathMap\":[{\"node\":\"DEFAULT_PATH_FOR_NON_LISTED_NODES\",\"paths\":[\"/data\"]}]}"}}'
+```
+**Description**: Configures the local-path storage provisioner to use /data directory.  
+**Context**: Sets up persistent storage for stateful components.  
+**Expected Output**: "configmap/local-path-config patched".  
+**Frequency**: Once, after cluster creation, before component installation.
+
+### Set Default Storage Class
+```bash
+kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+```
+**Description**: Marks local-path as the default storage class.  
+**Context**: Enables components to automatically use local-path for PVCs without explicit class.  
+**Expected Output**: "storageclass.storage.k8s.io/local-path patched".  
+**Frequency**: Once, during platform setup.
+
+### Deploy Kafka Cluster
+```bash
+kubectl apply -f platform/kafka-strimzi/kafka-cluster.yaml
+```
+**Description**: Deploys Kafka cluster using Strimzi operator.  
+**Context**: Creates a Kafka cluster for event streaming.  
+**Expected Output**: "kafka.kafka.strimzi.io/kafka-cluster created".  
+**Frequency**: Once, during Phase 3 (Data Platform).  
+**Config File**: platform/kafka-strimzi/kafka-cluster.yaml (3 brokers, 3 ZK nodes).
+
+### Deploy Kafka Connect
+```bash
+kubectl apply -f platform/kafka-strimzi/kafka-connect.yaml
+```
+**Description**: Deploys Kafka Connect cluster for data integration.  
+**Context**: Sets up connectors for external data sources/sinks.  
+**Expected Output**: "kafkaconnect.kafka.strimzi.io/kafka-connect created".  
+**Frequency**: Once, during Phase 3 (Data Platform).  
+**Config File**: platform/kafka-strimzi/kafka-connect.yaml (2 replicas).
+
+### Wait for Deployment with Custom Timeout
+```bash
+kubectl wait --for=condition=available deployment/<deployment-name> -n <namespace> --timeout=1200s
+```
+**Description**: Waits for a deployment to be available with customizable timeout.  
+**Context**: Ensures component startup completion before proceeding.  
+**Expected Output**: "deployment.apps/<name> condition met".  
+**Frequency**: During component installation.  
+**Examples**:
+- Grafana (1200s): `kubectl wait --for=condition=available deployment/grafana -n platform-system --timeout=1200s`
+- Rancher (1200s): `kubectl wait --for=condition=available deployment/rancher -n platform-system --timeout=1200s`
+- Strimzi (1200s): `kubectl wait --for=condition=available deployment/strimzi-cluster-operator -n kafka --timeout=1200s`
+
+### Wait for Kafka Resource
+```bash
+kubectl wait kafka/<kafka-name> --for=condition=Ready --timeout=600s -n kafka
+```
+**Description**: Waits for Kafka cluster custom resource to be ready.  
+**Context**: Ensures Kafka cluster is fully initialized before deploying connectors.  
+**Expected Output**: "kafka.kafka.strimzi.io/<name> condition met".  
+**Frequency**: After deploying Kafka cluster.
+
 ---
 
 ## 5. Status Monitoring
@@ -255,6 +369,33 @@ kubectl get pods -n kafka
 **Context**: Monitors Kafka operator and cluster status.  
 **Expected Output**: Pod names, READY status, RESTARTS, AGE.  
 **Frequency**: During Kafka deployment, troubleshooting.
+
+### Get Kafka Cluster Resources
+```bash
+kubectl get kafka -n kafka
+```
+**Description**: Lists all Kafka cluster resources.  
+**Context**: Verifies Kafka cluster creation and status.  
+**Expected Output**: Kafka cluster name, READY status, AGE.  
+**Frequency**: After Kafka cluster deployment.
+
+### Get Kafka Connect Resources
+```bash
+kubectl get kafkaconnect -n kafka
+```
+**Description**: Lists all Kafka Connect cluster resources.  
+**Context**: Verifies Kafka Connect deployment and status.  
+**Expected Output**: Kafka Connect cluster name, READY status, AGE.  
+**Frequency**: After Kafka Connect deployment.
+
+### Get Data-Platform Pods
+```bash
+kubectl get pods -n data-platform
+```
+**Description**: Lists all pods in the data-platform namespace.  
+**Context**: Monitors data platform component status.  
+**Expected Output**: Pod names, READY status, RESTARTS, AGE.  
+**Frequency**: After data platform deployment.
 
 ### Get All Resources in Platform-System
 ```bash
@@ -338,6 +479,73 @@ kubectl get pvc -n <namespace>
 ```
 **Description**: Lists persistent volume claims in a namespace.  
 **Context**: Verifies storage provisioning for stateful components.  
+
+---
+
+## 7. Session Commands Used
+
+### Run platform startup script
+```bash
+bash scripts/start-platform.sh
+```
+**Description**: Creates or recreates the k3d cluster and installs core platform components using the startup script.
+**Context**: Used to apply the corrected k3d config and install platform Helm charts.
+
+### Verify platform health
+```bash
+bash scripts/verify-platform.sh
+```
+**Description**: Executes the platform health verification script.
+**Context**: Used to confirm cluster readiness, namespace creation, storage binding, and Helm releases.
+
+### Wait for Prometheus deployment
+```bash
+kubectl --kubeconfig=scripts/.k3d-platform-cluster-config wait --for=condition=available deployment/prometheus-server -n platform-system --timeout=300s
+```
+**Description**: Waits for Prometheus server deployment availability before proceeding.
+**Context**: Used during troubleshooting when Prometheus needed extra startup time.
+
+### Inspect k3d container mounts
+```bash
+docker inspect k3d-platform-cluster-server-0 --format '{{json .Mounts}}'
+```
+**Description**: Shows Docker mount configuration for the k3d server container.
+**Context**: Used to verify the /data host bind mount is present inside the cluster container.
+
+### Execute path-safe command inside k3d server container
+```bash
+docker exec k3d-platform-cluster-server-0 sh -c 'test -d "/data"'
+```
+**Description**: Runs a shell command inside the k3d server container without Git Bash path translation.
+**Context**: Used to verify /data is mounted and available in the container.
+
+### Run data platform installation script
+```bash
+bash scripts/install-data-platform.sh
+```
+**Description**: Executes the data platform installation script for Kafka cluster and Kafka Connect.
+**Context**: Deploys Kafka cluster, Kafka Connect, and related data platform components.
+**Frequency**: Once, after core platform is running, or when resetting data platform.
+**Note**: Automatically waits for resources to be ready; skips if already deployed.
+
+### Copy kubeconfig to default location
+```bash
+cp infrastructure/k3d/kube-config.yaml ~/.kube/config
+```
+**Description**: Copies the cluster kubeconfig to the default kubectl config location.
+**Context**: Allows kubectl to automatically find the cluster config without environment variables.
+**Frequency**: Once, during initial setup or after config updates.
+**Windows Path**: `~\.kube\config` resolves to `%USERPROFILE%\.kube\config`
+
+### Fix kubeconfig for local access
+```bash
+sed -i 's/host\.docker\.internal/127.0.0.1/g' infrastructure/k3d/kube-config.yaml
+```
+**Description**: Replaces host.docker.internal with 127.0.0.1 for Windows/WSL2 compatibility.
+**Context**: Ensures kubectl can resolve API server address from Windows host.
+**Frequency**: Once, after generating kubeconfig.
+**Note**: Git Bash sed uses `-i` flag; WSL2 native sed may require `-i ''`.
+
 **Expected Output**: PVC name, STATUS, VOLUME, CAPACITY, ACCESS MODES.  
 **Frequency**: When components with persistent storage fail to start.
 
