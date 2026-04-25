@@ -5,7 +5,7 @@ set -euo pipefail
 # Simple verification script for platform health
 
 KUBECONFIG_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.k3d-platform-cluster-config"
-cp infrastructure/k3d/kube-config.yaml ~/.k3d-platform-cluster-config
+cp infrastructure/k3d/kube-config.yaml "$KUBECONFIG_FILE"
 echo "✅ Using kubeconfig: $KUBECONFIG_FILE"
 kubectl config view
 # export KUBECONFIG="$KUBECONFIG_FILE"
