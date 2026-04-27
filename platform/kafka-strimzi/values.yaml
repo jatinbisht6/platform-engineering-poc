@@ -1,7 +1,7 @@
 # Kafka cluster configuration
 kafka:
   # Set replicas to 2 for dev environment (3 ideal for production)
-  replicas: 2
+  replicas: 1
   
   # Configure storage
   storage:
