@@ -46,9 +46,9 @@ ports:
 
 options:
   runtime:
-    serversMemory: "3g"   
-    agentsMemory: "3g"
-    serversCPU: "1"
+    serversMemory: "4g"   
+    agentsMemory: "4g"
+    serversCPU: "2"
     agentsCPU: "2"
 
   k3s:

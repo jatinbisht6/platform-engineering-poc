@@ -152,23 +152,23 @@ wait_for_deployment cert-manager-webhook platform-system
 # 7️⃣ Install Prometheus
 # ---------------------------
 
-echo "✅ Installing Prometheus..."
-helm upgrade --install prometheus prometheus-community/prometheus \
-    -f platform/observability/prometheus/values.yaml \
-    --namespace platform-system \
-    --create-namespace
-wait_for_deployment prometheus-server platform-system 300
+# echo "✅ Installing Prometheus..."
+# helm upgrade --install prometheus prometheus-community/prometheus \
+#     -f platform/observability/prometheus/values.yaml \
+#     --namespace platform-system \
+#     --create-namespace
+# wait_for_deployment prometheus-server platform-system 300
 
 # ---------------------------
 # 8️⃣ Install Grafana
 # ---------------------------
 
-echo "✅ Installing Grafana..."
-helm upgrade --install grafana grafana/grafana \
-    -f platform/observability/grafana/values.yaml \
-    --namespace platform-system \
-    --create-namespace
-wait_for_deployment grafana platform-system 1200
+# echo "✅ Installing Grafana..."
+# helm upgrade --install grafana grafana/grafana \
+#     -f platform/observability/grafana/values.yaml \
+#     --namespace platform-system \
+#     --create-namespace
+# wait_for_deployment grafana platform-system 1200
 
 # ---------------------------
 # 9️⃣ Install Kafka Strimzi Operator
