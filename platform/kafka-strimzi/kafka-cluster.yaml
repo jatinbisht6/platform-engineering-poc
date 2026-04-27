@@ -3,20 +3,17 @@ kind: Kafka
 metadata:
   name: kafka-cluster
   namespace: kafka
-
 spec:
   kafka:
-    version: 4.2.0
-    replicas: 2
+    version: 3.6.0
+    metadataVersion: 3.6-IV2
 
     listeners:
-      # 🔹 Internal communication
       - name: internal
         port: 9092
         type: internal
         tls: false
 
-      # 🔹 External access (from your laptop)
       - name: external
         port: 9094
         type: nodeport
@@ -27,18 +24,6 @@ spec:
       transaction.state.log.replication.factor: 2
       transaction.state.log.min.isr: 1
       auto.create.topics.enable: false
-
-    storage:
-      type: persistent-claim
-      size: 5Gi
-      deleteClaim: false
-
-  zookeeper:
-    replicas: 1   # keep lightweight for local
-    storage:
-      type: persistent-claim
-      size: 2Gi
-      deleteClaim: false
 
   entityOperator:
     topicOperator: {}

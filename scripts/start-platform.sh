@@ -185,12 +185,12 @@ wait_for_deployment strimzi-cluster-operator kafka 1200
 # 🔟 Install Rancher
 # ---------------------------
 
-echo "✅ Installing Rancher..."
-helm upgrade --install rancher rancher-latest/rancher \
-    -f platform/rancher/values.yaml \
-    --namespace platform-system \
-    --create-namespace
-wait_for_deployment rancher platform-system 1200
+# echo "✅ Installing Rancher..."
+# helm upgrade --install rancher rancher-latest/rancher \
+#     -f platform/rancher/values.yaml \
+#     --namespace platform-system \
+#     --create-namespace
+# wait_for_deployment rancher platform-system 1200
 
 # ---------------------------
 # 1️⃣1️⃣ Output Information
