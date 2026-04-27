@@ -1,4 +1,4 @@
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaConnect
 metadata:
   name: kafka-connect
@@ -7,20 +7,17 @@ metadata:
     strimzi.io/use-connector-resources: "true"
 
 spec:
-  version: 3.7.0
+  version: 3.6.0
   replicas: 1
 
   bootstrapServers: kafka-cluster-kafka-bootstrap:9092
 
+  groupId: connect-cluster
+  offsetStorageTopic: connect-offsets
+  configStorageTopic: connect-configs
+  statusStorageTopic: connect-status
+
   config:
-    group.id: connect-cluster
-
-    # Internal topics
-    offset.storage.topic: connect-offsets
-    config.storage.topic: connect-configs
-    status.storage.topic: connect-status
-
-    # Replication (match your 2-broker setup)
     offset.storage.replication.factor: 2
     config.storage.replication.factor: 2
     status.storage.replication.factor: 2

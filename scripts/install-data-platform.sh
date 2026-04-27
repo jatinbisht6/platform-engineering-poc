@@ -41,11 +41,13 @@ if resource_exists kafka kafka-cluster; then
     echo "✅ Kafka cluster already running. Skipping deployment."
   else
     echo "⚠️ Kafka exists but not ready. Re-applying..."
+    kubectl apply -f platform/kafka-strimzi/kafka-nodepool.yaml
     kubectl apply -f platform/kafka-strimzi/kafka-cluster.yaml
   fi
 
 else
   echo "🚀 Deploying Kafka cluster..."
+  kubectl apply -f platform/kafka-strimzi/kafka-nodepool.yaml
   kubectl apply -f platform/kafka-strimzi/kafka-cluster.yaml
 
   echo "⏳ Waiting for Kafka cluster..."
