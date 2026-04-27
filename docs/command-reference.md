@@ -314,7 +314,7 @@ kubectl apply -f platform/kafka-strimzi/kafka-cluster.yaml
 **Context**: Creates a Kafka cluster for event streaming.  
 **Expected Output**: "kafka.kafka.strimzi.io/kafka-cluster created".  
 **Frequency**: Once, during Phase 3 (Data Platform).  
-**Config File**: platform/kafka-strimzi/kafka-cluster.yaml (3 brokers, 3 ZK nodes).
+**Config File**: platform/kafka-strimzi/kafka-cluster.yaml (KRaft mode - no ZooKeeper required).
 
 ### Deploy Kafka Connect
 ```bash
@@ -387,6 +387,84 @@ kubectl get kafkaconnect -n kafka
 **Context**: Verifies Kafka Connect deployment and status.  
 **Expected Output**: Kafka Connect cluster name, READY status, AGE.  
 **Frequency**: After Kafka Connect deployment.
+
+### Kafka Cluster Verification
+
+#### Describe Kafka Cluster
+```bash
+kubectl describe kafka kafka-cluster -n kafka
+```
+**Description**: Shows detailed information about the Kafka cluster resource.  
+**Context**: Troubleshooting Kafka cluster issues, viewing conditions and events.  
+**Expected Output**: Kafka cluster specification, status, and event history.  
+**Frequency**: When troubleshooting Kafka deployment.
+
+#### Check Kafka Broker Logs
+```bash
+kubectl logs -n kafka kafka-cluster-kafka-0
+```
+**Description**: Displays logs from the first Kafka broker pod.  
+**Context**: Debugging broker startup issues or runtime errors.  
+**Expected Output**: Kafka broker startup and runtime logs.  
+**Frequency**: When Kafka pods fail to start or show errors.  
+**Note**: Brokers are numbered: kafka-cluster-kafka-0, kafka-cluster-kafka-1, kafka-cluster-kafka-2, etc.
+
+#### Port Forward to Kafka Bootstrap Server
+```bash
+kubectl port-forward -n kafka svc/kafka-cluster-kafka-bootstrap 9092:9092
+```
+**Description**: Creates a local port forward to the Kafka bootstrap server.  
+**Context**: Enables local testing and debugging of Kafka cluster connectivity.  
+**Expected Output**: "Forwarding from 127.0.0.1:9092 -> 9092...".  
+**Frequency**: When testing Kafka connectivity from local machine.  
+**Note**: Keep terminal open while port forwarding is active.
+
+#### Test Kafka Connectivity (kafkacat)
+```bash
+kafkacat -b localhost:9092 -L
+```
+**Description**: Lists all topics and brokers in the Kafka cluster (requires kafkacat installed).  
+**Context**: Verifies Kafka cluster is fully operational and accessible.  
+**Expected Output**: Topic list, partition information, broker details.  
+**Frequency**: After Kafka cluster deployment to verify connectivity.  
+**Prerequisites**: Install kafkacat (`brew install kafkacat` on macOS, or use Docker image).  
+**Alternative**: Use `kafka-topics.sh` from within a Kafka pod if kafkacat unavailable.
+
+#### List Kafka Topics via kubectl
+```bash
+kubectl exec -it -n kafka kafka-cluster-kafka-0 -- bin/kafka-topics.sh --list --bootstrap-server localhost:9092
+```
+**Description**: Lists all topics in the Kafka cluster using kafka-topics.sh.  
+**Context**: Verifies Kafka cluster topics when kafkacat is unavailable.  
+**Expected Output**: List of topic names.  
+**Frequency**: After Kafka cluster deployment.
+
+#### Check Kafka Broker Status
+```bash
+kubectl get pods -n kafka -l app.kubernetes.io/name=kafka,app.kubernetes.io/instance=kafka-cluster
+```
+**Description**: Lists all Kafka broker pods with detailed status.  
+**Context**: Verifies all broker pods are running and ready.  
+**Expected Output**: All kafka-cluster-kafka pods in Running state.  
+**Frequency**: During Kafka deployment, troubleshooting.
+
+#### Check Kafka Node Pools (KRaft)
+```bash
+kubectl get kafkanodepools -n kafka
+```
+**Description**: Lists Kafka node pools for KRaft mode (replaces ZooKeeper).  
+**Context**: Verifies Kafka controller and broker node pools are configured.  
+**Expected Output**: kafka-cluster-brokers and kafka-cluster-controllers node pools.  
+**Frequency**: After Kafka cluster deployment to verify KRaft setup.
+
+#### Check Kafka Controller Pods (KRaft)
+```bash
+kubectl get pods -n kafka -l kafka.strimzi.io/controller=true
+```
+**Description**: Lists Kafka controller pods running KRaft consensus.  
+**Context**: Verifies Kafka controllers are running (KRaft replaces ZooKeeper).  
+**Expected Output**: All controller pods in Running state.  
+**Frequency**: After Kafka cluster deployment, troubleshooting.
 
 ### Get Data-Platform Pods
 ```bash

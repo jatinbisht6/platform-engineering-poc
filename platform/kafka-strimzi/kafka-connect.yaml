@@ -17,11 +17,11 @@ spec:
   configStorageTopic: connect-configs
   statusStorageTopic: connect-status
 
-  offsetStorageReplicationFactor: 2
-  configStorageReplicationFactor: 2
-  statusStorageReplicationFactor: 2
-
   config:
+    offset.storage.replication.factor: 2
+    config.storage.replication.factor: 2
+    status.storage.replication.factor: 2
+
     # Converters
     key.converter: org.apache.kafka.connect.json.JsonConverter
     value.converter: org.apache.kafka.connect.json.JsonConverter

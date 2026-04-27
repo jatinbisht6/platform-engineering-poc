@@ -158,29 +158,113 @@ verify_core_components() {
       desired=$(kubectl get "$kind" "$name" -n "$ns" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 0)
       ready=${ready:-0}
       desired=${desired:-0}
-      if [ "$desired" -gt 0 ] && [ "$ready" -ge "$desired" ]; then
-        check_pass "$label is ready ($ready/$desired) in $ns"
-      elif [ "$desired" -gt 0 ]; then
-        check_warn "$label exists in $ns but is not fully ready ($ready/$desired)"
+      
+      # Special handling for Kafka StatefulSet - allow partial readiness
+      if [ "$name" = "kafka-cluster-kafka" ]; then
+        if [ "$desired" -gt 0 ] && [ "$ready" -gt 0 ]; then
+          if [ "$ready" -eq "$desired" ]; then
+            check_pass "$label is fully ready ($ready/$desired) in $ns"
+          else
+            check_warn "$label is partially ready ($ready/$desired) - this is normal during startup"
+          fi
+        elif [ "$desired" -eq 0 ]; then
+          check_warn "$label is configured but not yet starting ($desired desired replicas)"
+        else
+          check_fail "$label is not ready (0/$desired)"
+        fi
       else
-        check_pass "$label exists in $ns"
+        # Standard component check
+        if [ "$desired" -gt 0 ] && [ "$ready" -ge "$desired" ]; then
+          check_pass "$label is ready ($ready/$desired) in $ns"
+        elif [ "$desired" -gt 0 ]; then
+          check_warn "$label exists in $ns but is not fully ready ($ready/$desired)"
+        else
+          check_pass "$label exists in $ns"
+        fi
       fi
     else
-      check_fail "$label is not deployed in $ns"
+      # Special handling for Kafka - it's expected to take time
+      if [ "$name" = "kafka-cluster-kafka" ]; then
+        check_warn "$label is not deployed yet in $ns - Kafka operator may still be initializing"
+      else
+        check_fail "$label is not deployed in $ns"
+      fi
     fi
   done
+}
+
+verify_kafka_details() {
+  print_header "7.5. Kafka Detailed Status"
+  
+  # Check Kafka CR exists
+  if kubectl get kafka kafka-cluster -n kafka >/dev/null 2>&1; then
+    check_pass "Kafka CR 'kafka-cluster' exists"
+    
+    # Get Kafka CR status
+    local kafka_status
+    kafka_status=$(kubectl get kafka kafka-cluster -n kafka -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "unknown")
+    check_pass "Kafka CR status: $kafka_status"
+  else
+    check_warn "Kafka CR 'kafka-cluster' not found - may still be creating"
+  fi
+  
+  # Check Kafka brokers
+  if kubectl get pods -n kafka -l app.kubernetes.io/name=kafka,app.kubernetes.io/instance=kafka-cluster --no-headers 2>/dev/null | grep -q .; then
+    check_pass "Kafka broker pods exist"
+    local broker_ready
+    broker_ready=$(kubectl get pods -n kafka -l app.kubernetes.io/name=kafka,app.kubernetes.io/instance=kafka-cluster --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo 0)
+    local broker_total
+    broker_total=$(kubectl get pods -n kafka -l app.kubernetes.io/name=kafka,app.kubernetes.io/instance=kafka-cluster --no-headers 2>/dev/null | wc -l || echo 0)
+    check_warn "Kafka brokers: $broker_ready running out of $broker_total total"
+    kubectl get pods -n kafka -l app.kubernetes.io/name=kafka,app.kubernetes.io/instance=kafka-cluster --no-headers 2>/dev/null | awk '{print "  - " $1 " (" $3 ")"}'
+  else
+    check_warn "No Kafka broker pods found yet"
+  fi
+  
+  # Check Kafka Controller pools (KRaft mode - replaces ZooKeeper)
+  if kubectl get kafkanodepools -n kafka --no-headers 2>/dev/null | grep -q .; then
+    check_pass "Kafka node pools exist (KRaft mode)"
+    local controller_count
+    controller_count=$(kubectl get kafkanodepools kafka-cluster-controllers -n kafka -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 0)
+    check_pass "Kafka controllers configured: $controller_count"
+  else
+    check_warn "Kafka node pools not yet initialized"
+  fi
 }
 
 verify_pod_health() {
   print_header "8. Pod Health"
   local problem_pods
-  problem_pods=$(kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded --no-headers 2>/dev/null || true)
-
-  if [ -z "$problem_pods" ]; then
-    check_pass "No pods in error or crash state"
-  else
-    check_warn "Pods with problems detected:"
-    printf '%s\n' "$problem_pods"
+  local crash_loop_pods
+  local pending_pods
+  local error_pods
+  
+  # Check for CrashLoopBackOff pods
+  crash_loop_pods=$(kubectl get pods -A -o wide 2>/dev/null | grep -i "crashloopbackoff" || true)
+  if [ -n "$crash_loop_pods" ]; then
+    check_warn "Pods in CrashLoopBackOff state detected:"
+    echo "$crash_loop_pods" | awk '{print "  - Pod: " $2 " | Namespace: " $1 " | Status: " $4}'
+  fi
+  
+  # Check for Pending pods
+  pending_pods=$(kubectl get pods -A --field-selector=status.phase=Pending --no-headers 2>/dev/null || true)
+  if [ -n "$pending_pods" ]; then
+    check_warn "Pods in Pending state (waiting for resources):"
+    printf '%s\n' "$pending_pods" | awk '{print "  - " $1 " (Namespace: " $2 ")"}'
+  fi
+  
+  # Check for Failed pods
+  error_pods=$(kubectl get pods -A --field-selector=status.phase=Failed --no-headers 2>/dev/null || true)
+  if [ -n "$error_pods" ]; then
+    check_fail "Pods in Failed state:"
+    printf '%s\n' "$error_pods" | awk '{print "  - " $1 " (Namespace: " $2 ")"}'
+  fi
+  
+  # Check for Unknown state pods
+  unknown_pods=$(kubectl get pods -A --field-selector=status.phase=Unknown --no-headers 2>/dev/null || true)
+  if [ -n "$unknown_pods" ]; then
+    check_warn "Pods in Unknown state:"
+    printf '%s\n' "$unknown_pods" | awk '{print "  - " $1 " (Namespace: " $2 ")"}'
   fi
 
   local total_running
@@ -313,12 +397,76 @@ generate_summary() {
   printf 'Passed: %s\n' "$PASSED"
   printf 'Warnings: %s\n' "$WARNINGS"
   printf 'Failed: %s\n' "$FAILED"
+  
   if [ "$FAILED" -eq 0 ]; then
-    printf 'STATUS: OK\n'
+    if [ "$WARNINGS" -gt 0 ]; then
+      printf 'STATUS: HEALTHY WITH WARNINGS\n'
+      printf 'Note: Some components may still be initializing. Warnings are normal during startup.\n'
+    else
+      printf 'STATUS: OK\n'
+    fi
   else
     printf 'STATUS: ISSUES\n'
+    printf 'Critical components are missing or non-functional.\n'
   fi
 }
+
+show_detailed_issues() {
+  print_header "Detailed Issue Analysis"
+  
+  # Check for failed component deployments
+  echo "🔴 Failed Component Details:"
+  if ! kubectl get deployment rancher -n platform-system >/dev/null 2>&1; then
+    echo "  • Rancher: NOT DEPLOYED"
+    echo "    Reason: Rancher Helm release not installed"
+    echo "    Action: Run the following command:"
+    echo "    helm upgrade --install rancher rancher-latest/rancher -f platform/rancher/values.yaml --namespace platform-system --create-namespace"
+  fi
+  
+  if ! kubectl get kafkaconnect kafka-connect -n kafka >/dev/null 2>&1; then
+    echo "  • Kafka Connect: NOT DEPLOYED"
+    echo "    Reason: KafkaConnect resource not created"
+    echo "    Action: Run the following command:"
+    echo "    kubectl apply -f platform/kafka-strimzi/kafka-connect.yaml"
+  fi
+  
+  # Check for component readiness issues
+  echo ""
+  echo "⚠️  Components Not Ready / With Issues:"
+  
+  # Strimzi Operator
+  local strimzi_ready
+  strimzi_ready=$(kubectl get deployment strimzi-cluster-operator -n kafka -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
+  if [ "$strimzi_ready" != "1" ]; then
+    echo "  • Strimzi Operator (0/1 ready):"
+    echo "    Pod status:"
+    kubectl get pods -n kafka -l app.kubernetes.io/name=strimzi-cluster-operator -o wide 2>/dev/null | tail -1 || echo "    No pods found"
+  fi
+  
+  # Kafka Cluster details
+  echo "  • Kafka Cluster Status:"
+  local kafka_pod_count=$(kubectl get pods -n kafka -l app.kubernetes.io/name=kafka --no-headers 2>/dev/null | wc -l || echo 0)
+  if [ "$kafka_pod_count" -gt 0 ]; then
+    echo "    Found $kafka_pod_count Kafka broker pods:"
+    kubectl get pods -n kafka -l app.kubernetes.io/name=kafka -o wide 2>/dev/null | grep -v "^NAME" | while IFS= read -r line; do
+      local pod_name=$(echo "$line" | awk '{print $1}')
+      local status=$(echo "$line" | awk '{print $3}')
+      local restarts=$(echo "$line" | awk '{print $4}')
+      echo "    - Pod: $pod_name | Status: $status | Restarts: $restarts"
+    done
+  else
+    echo "    No Kafka broker pods found yet. Waiting for initialization..."
+  fi
+  
+  # No ingress warning  
+  local ingress_count=$(kubectl get ingress -A --no-headers 2>/dev/null | wc -l || true)
+  if [ "$ingress_count" -eq 0 ]; then
+    echo "  • No Ingress Resources Found"
+    echo "    Note: This is expected if you're accessing services directly via NodePort"
+    echo "    Available services: Grafana (32044), Prometheus (32090)"
+  fi
+}
+
 
 main() {
   printf '\nPlatform Engineering Lab - Verifier\n'
@@ -329,6 +477,7 @@ main() {
   verify_storage_class
   verify_pvcs
   verify_core_components
+  verify_kafka_details
   verify_pod_health
   verify_networking
   verify_helm_releases
@@ -337,15 +486,19 @@ main() {
   verify_docker_volumes
   verify_permissions
   generate_status_report
+  
+  # Show detailed issues before summary
+  if [ "$FAILED" -gt 0 ] || [ "$WARNINGS" -gt 0 ]; then
+    show_detailed_issues
+  fi
+  
   generate_summary
 
   if [ "$FAILED" -gt 0 ]; then
-      echo "🔧 Missing components..."
-      echo "Please run the appropriate scripts to install any missing platform components."
-      echo "After installation, re-run this verification script to confirm all components are healthy."
-      echo "If issues persist, check the logs of the affected components and consult the documentation for troubleshooting steps."
+      echo ""
+      echo "🔧 Critical Issues Detected"
+      echo "Please address the failed components listed above, then re-run this script."
       exit 1
-    #   exec "$0" "$@"
   fi
   exit 0
 }

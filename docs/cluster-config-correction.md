@@ -3,8 +3,8 @@
 ## Overview
 This document outlines corrections and optimizations made to the k3d cluster configuration and Helm values.yaml files. The changes address port mappings, persistent storage configuration, and YAML structure validation to ensure all components deploy correctly and data persists on the D: drive.
 
-**Last Updated**: April 19, 2026  
-**Status**: ✅ Cluster deployed successfully with core components
+**Last Updated**: April 27, 2026  
+**Status**: ✅ Cluster deployed successfully with core components and KRaft Kafka
 
 ## Corrections Applied
 
@@ -51,23 +51,26 @@ service:
 ```
 
 ### 4. Kafka Strimzi (platform/kafka-strimzi/values.yaml)
-**Issue**: Kafka listener port was 9092, but cluster-config maps 9092:30992 (internal 30992).  
-**Fix**: Updated port to 30992 for consistency (optional but recommended).  
+**Issue**: Configuration included ZooKeeper section, but cluster uses KRaft mode.  
+**Fix**: Removed ZooKeeper configuration; kafka-cluster.yaml already has KRaft enabled via annotations.  
 **Updated Content**:
 ```yaml
 kafka:
-  replicas: 1
+  replicas: 2
   listeners:
     - name: plain
-      port: 30992
+      port: 9092
       type: internal
       tls: false
-zookeeper:
-  replicas: 1
+# KRaft mode is enabled - no ZooKeeper required
+# See kafka-cluster.yaml annotations:
+#   strimzi.io/kraft: enabled
+#   strimzi.io/node-pools: enabled
 entityOperator:
   topicOperator: {}
   userOperator: {}
 ```
+**Note**: KRaft (Kafka Raft) replaces ZooKeeper for cluster coordination. It's more efficient and requires less infrastructure.
 
 ### 5. NGINX Ingress (platform/ingress/values.yaml)
 **Status**: Already correct. nodePorts (30080 for HTTP, 30443 for HTTPS) match cluster-config mappings (8080:30080, 8443:30443). No changes needed.
